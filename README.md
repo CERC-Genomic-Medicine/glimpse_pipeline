@@ -1,2 +1,2 @@
 # glimpse_pipeline
-Pipeline for variant imputation using GLIMPSE
+Pipeline for genotype imputation from sequencing data using GLIMPSE
