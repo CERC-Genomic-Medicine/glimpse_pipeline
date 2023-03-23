@@ -13,3 +13,4 @@ The following software is required:
 To run this pipline you will need:
 1. Download and install [GLIMPSE1](https://github.com/odelaneau/GLIMPSE)
 2. Build GATK singularity container: `singularity build gatk_VERSION.sif docker://broadinstitute/gatk:VERSION`
+3. Clone this repo: `git clone https://github.com/CERC-Genomic-Medicine/glimpse_pipeline.git`
