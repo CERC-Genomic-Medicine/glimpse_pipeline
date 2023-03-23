@@ -30,3 +30,12 @@ To run this pipline you will need:
 * `params.ligate_exec` -- path to the `GLIMPSE_ligate` executable.
 * `params.glimpse_maps` -- path to the GLIMPSE's genetic maps folder with the corresponding human genome build version (unarchived).
 * `process.*` and `executor.*` -- set this arguments according to your compute cluster configuration.
+
+2. Run pipleine. Example of interactive SLURM job:
+```
+salloc --time=12:00:00 --ntasks=1 --mem-per-cpu=16G
+module load nextflow
+module load singularity
+module load bcftools
+nextflow run Pipeline.nf
+```
