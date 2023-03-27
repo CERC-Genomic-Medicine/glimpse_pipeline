@@ -28,7 +28,7 @@ To run this pipline you will need:
 * `params.chunk_exec` -- path to the `GLIMPSE_chunk` executable.
 * `params.phase_exec` -- path to the `GLIMPSE_phase` executable.
 * `params.ligate_exec` -- path to the `GLIMPSE_ligate` executable.
-* `params.glimpse_maps` -- path to the GLIMPSE's genetic maps folder with the corresponding human genome build version (unarchived).
+* `params.glimpse_maps` -- path to the GLIMPSE's genetic maps folder with the corresponding human genome build version.
 * `process.*` and `executor.*` -- set this arguments according to your compute cluster configuration.
 
 2. Run pipleine. Example of interactive SLURM job:
