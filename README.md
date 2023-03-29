@@ -37,5 +37,5 @@ salloc --time=12:00:00 --ntasks=1 --mem-per-cpu=16G
 module load nextflow
 module load singularity
 module load bcftools
-nextflow run Pipeline.nf
+nextflow run Imputation.nf
 ```
