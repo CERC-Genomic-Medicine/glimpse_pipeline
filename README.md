@@ -18,6 +18,7 @@ cd GLIMPSE/
 git checkout glimpse1
 cd ..
 ```
+Then, follow the documentation at [GLIMPSE webpage](https://odelaneau.github.io/GLIMPSE/glimpse1/installation.html).
 2. Build GATK singularity container (see available versions at [broadinstitute/gatk](https://hub.docker.com/r/broadinstitute/gatk): `apprainer build gatk_VERSION.sif docker://broadinstitute/gatk:VERSION`
 3. Clone this repo: `git clone https://github.com/CERC-Genomic-Medicine/glimpse_pipeline.git`
 
