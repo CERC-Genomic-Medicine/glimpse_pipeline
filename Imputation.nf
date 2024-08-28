@@ -2,8 +2,8 @@
 
 /*
 * AUTHOR: CERC Genomic Medicine,  Daniel Taliun, PhD <daniel.taliun@mcgill.ca>
-* VERSION: 2.0
-* YEAR: 2023
+* VERSION: 3.0
+* YEAR: 2024
 */
 
 
@@ -13,7 +13,7 @@ process chunk {
 	cpus 1
 
 	input:
-	tuple path(sites_vcf), path(sites_vcf_index)
+	tuple val(chrom), path(sites_vcf), path(sites_vcf_index)
 
 	output:
 	path("*.chunk.*.txt")
@@ -22,70 +22,20 @@ process chunk {
 	publishDir "results/logs/chunk/", pattern: "*.chunks.log", mode: "copy"
 
 	"""
-	n_chrom=`bcftools index -s ${sites_vcf} | wc -l`
-	if [[ \${n_chrom} -gt 1 ]]; then
-		echo "Multiple chromosomes within one reference panel VCF are not allowed." 1>&2
-		exit 1
-	fi
-	chrom=`bcftools index -s ${sites_vcf} | cut -f1`
-
- 	${params.chunk_exec} --input ${sites_vcf} --region \${chrom} --window-size ${params.window_size} --buffer-size ${params.buffer_size} --output \${chrom}.chunks.txt > \${chrom}.chunks.log
-	split -l 1 -d --additional-suffix=.txt \${chrom}.chunks.txt \${chrom}.chunk.
+	# Chromosome X in the reference panel is assumed to be split into chrX_nonpar, chrX_par1 and chrX_par2 regions. Each of these three regions are chunked separately.
+	${params.chunk_exec} --input ${sites_vcf} --region ${chrom.split("_")[0]} --window-size ${params.window_size} --buffer-size ${params.buffer_size} --output ${chrom}.chunks.txt > ${chrom}.chunks.log
+	split -l 1 -d --additional-suffix=.txt ${chrom}.chunks.txt ${chrom}.chunk.
 	"""	
 }
 
 
-process reference_by_chrom {
-	executor "local"
-	cpus 1
-
-	input:
-	tuple path(vcf), path(vcf_index)
-
-	output:
-	tuple stdout, path(vcf), path(vcf_index)
-
-	"""
-	n_chrom=`bcftools index -s ${vcf} | wc -l`
-	if [[ \${n_chrom} -gt 1 ]]; then
-		echo "Multiple chromosomes within one reference panel VCF are not allowed." 1>&2
-		exit 1
-	fi
-	chrom=`bcftools index -s ${vcf} | cut -f1`
-	printf "\${chrom}"
-	"""
-}
-
-
-process reference_sites_by_chrom {
-	executor "local"
-	cpus 1
-
-	input:
-	tuple path(vcf), path(vcf_index)
-
-	output:
-	tuple stdout, path(vcf), path(vcf_index)
-
-	"""
-	n_chrom=`bcftools index -s ${vcf} | wc -l`
-	if [[ \${n_chrom} -gt 1 ]]; then
-		echo "Multiple chromosomes within one reference panel VCF are not allowed." 1>&2
-		exit 1
-	fi
-	chrom=`bcftools index -s ${vcf} | cut -f1`
-	printf "\${chrom}"
-	"""
-}
-
-
 process HaplotypeCaller {
-	//errorStrategy 'retry'
-	//maxRetries 3
+	errorStrategy 'retry'
+	maxRetries 3
 	cache "lenient"
 	cpus 1
-	memory "16 GB"
-	time "48h"
+	memory "4 GB"
+	time "8h"
 	//scratch '$SLURM_TMPDIR'
 	//stageInMode "copy"
 
@@ -99,7 +49,7 @@ process HaplotypeCaller {
 	tuple val(chrom), path("${chrom}.${bam.getSimpleName()}.vcf.gz"), path("${chrom}.${bam.getSimpleName()}.vcf.gz.tbi")
    
 	"""
-	gatk --java-options -Xmx14G HaplotypeCaller --native-pair-hmm-threads 1 -R /ref/${params.referenceGenome} -L ${sites_vcf} --alleles ${sites_vcf} -I ${bam} -O ${chrom}.${bam.getSimpleName()}.vcf.gz --output-mode EMIT_ALL_ACTIVE_SITES
+	gatk --java-options "-Xmx3G" HaplotypeCaller --native-pair-hmm-threads 1 -R /ref/${params.referenceGenome} -L ${sites_vcf} --alleles ${sites_vcf} -I ${bam} -O ${chrom}.${bam.getSimpleName()}.vcf.gz --output-mode EMIT_ALL_ACTIVE_SITES
 	"""
 }
 
@@ -108,7 +58,7 @@ process join_per_sample_pls {
 	cache "lenient"
 	cpus 1
 	memory "8 GB"
-	time "12h"
+	time "72h"
 
 	input:
 	tuple val(chrom), path(vcfs), path(vcfs_indices)
@@ -116,9 +66,11 @@ process join_per_sample_pls {
 	output:
 	tuple val(chrom), path("${chrom}.pls.vcf.gz"), path("${chrom}.pls.vcf.gz.tbi")
 
+        publishDir "results/joined_per_sample_pls", pattern: "${chrom}.pls.vcf*", mode: "copy" 
+
 	"""
 	for f in ${vcfs}; do echo "\${f}"; done | sort  > files.txt
-	bcftools merge -i - -m none -l files.txt | bcftools annotate -x INFO | bcftools view -m2 -M2 -Oz -o ${chrom}.pls.vcf.gz
+	bcftools merge -i - -m none -l files.txt -Ou | bcftools annotate -x INFO -Ou | bcftools view -m2 -M2 -Oz -o ${chrom}.pls.vcf.gz
 	bcftools index -t ${chrom}.pls.vcf.gz
 	"""
 }
@@ -161,9 +113,20 @@ process impute_chunks {
 	id=`head -n1 ${chunk} | cut -f1`
 	irg=`head -n1 ${chunk} | cut -f3`
 	org=`head -n1 ${chunk} | cut -f4`
-	chrom_no_prefix=`echo "${chrom}" | sed "s/chr//"`
-	
-	${params.phase_exec} --input ${pls_vcf} --reference ${ref_vcf} --map ${params.glimpse_maps}/chr\${chrom_no_prefix}.b[0-9]*.gmap.gz --input-region \${irg} --output-region \${org} --output ${chrom}.\${id}.imputed.bcf --log ${chrom}.\${id}.imputed.log
+
+	# chrX_nonpar -> X, chrX_par1 -> X_par1, chrX_par2 -> X_par2, chr1 -> 1, ..., chr22 -> 22
+	map_file_name=`echo "${chrom}" | sed "s/^chr//" | sed "s/_nonpar\$//"`
+
+        # GLIMPSE1 imputation can be negatively affected when using GLs computed for indels. We keep only SNPs.
+        bcftools view -v snps ${pls_vcf} \${irg} -Ob -o only_snps_input.bcf
+	bcftools index only_snps_input.bcf
+
+	# For GLIMPSE1, to impute INDELs which are present only in reference, we need to use `--impute-reference-only-variants` flag.
+	if [ "${chrom}" = "chrX_nonpar" ]; then
+		${params.phase_exec} --impute-reference-only-variants --samples-file ${params.study_sample_ploidy} --input only_snps_input.bcf --reference ${ref_vcf} --map ${params.glimpse_maps}/chr\${map_file_name}.b[0-9]*.gmap.gz --input-region \${irg} --output-region \${org} --output ${chrom}.\${id}.imputed.bcf --log ${chrom}.\${id}.imputed.log
+	else
+		${params.phase_exec} --impute-reference-only-variants --input only_snps_input.bcf --reference ${ref_vcf} --map ${params.glimpse_maps}/chr\${map_file_name}.b[0-9]*.gmap.gz --input-region \${irg} --output-region \${org} --output ${chrom}.\${id}.imputed.bcf --log ${chrom}.\${id}.imputed.log
+	fi
 	"""
 }
 
@@ -195,17 +158,19 @@ process ligate_chunks {
 
 
 workflow {
-	chunks = chunk(Channel.fromPath(params.reference_sites_vcfs).map{ vcf -> [vcf, vcf + (vcf.getExtension() == "bcf" ? ".csi" : ".tbi")] })
-	
-	study_bams = Channel.fromPath(params.study_bams).map { file -> [file, file + (file.getExtension() == "bam" ? ".bai" : ".crai")] }
-	reference_vcfs = reference_by_chrom(Channel.fromPath(params.reference_vcfs).map{ file -> [file, file + (file.getExtension() == "bcf" ? ".csi" : ".tbi")] })
-	reference_sites_vcfs = reference_sites_by_chrom(Channel.fromPath(params.reference_sites_vcfs).map{ file -> [file, file + (file.getExtension() == "bcf" ? ".csi" : ".tbi")] }) 
+	// We assume that the chromosome name is encoded in the file prefix e.g. chr1.name.vcf.gz, chr2.name.vcf.gz, ..., chrX_nonpar.name.vcf.gz, chrX_par1.name.vcf.gz, chrX_par2.name.vcf.gz
+	reference_vcfs = Channel.fromFilePairs("${params.reference_vcfs}", size: -1) { file -> file.getName().replaceAll("(.csi|.tbi)\$", "") }.map {it -> [ (it[0] =~ /chrX{1}[.]{1}|chrX_nonpar|chrX_par1|chrX_par2|chr[1-9][0-9]?/)[0], it[1][0], it[1][1]] }
+	reference_sites_vcfs = Channel.fromFilePairs("${params.reference_sites_vcfs}", size: -1) { file -> file.getName().replaceAll("(.csi|.tbi)\$", "") }.map {it -> [ (it[0] =~ /chrX{1}[.]{1}|chrX_nonpar|chrX_par1|chrX_par2|chr[1-9][0-9]?/)[0], it[1][0], it[1][1]] }
 
+	// Pair *.bam and *.bai (or *.cram and *.crai) files by the filename prefix, and make sure that *.bam (or *.cram) file is first in the emitted pair 
+	study_bams = Channel.fromFilePairs("${params.study_bams}", flat: true, size: 2).map(it -> ((it[1].getExtension() == "bam") || (it[1].getExtension() == "cram")) ? [it[1], it[2]] : [it[2], it[1]])
 
 	per_sample_pls = HaplotypeCaller(study_bams.combine(reference_sites_vcfs))
 	all_pls = join_per_sample_pls(per_sample_pls.groupTuple())
 
-	imputed_chunks = impute_chunks(all_pls.join(reference_vcfs).combine(chunks[0].flatten().map{ file -> [file.getSimpleName(), file] }, by: 0))
+        chunks = chunk(Channel.fromFilePairs("${params.reference_sites_vcfs}", size: -1) { file -> file.getName().replaceAll("(.csi|.tbi)\$", "") }.map {it -> [ (it[0] =~ /chrX{1}[.]{1}|chrX_nonpar|chrX_par1|chrX_par2|chr[1-9][0-9]?/)[0], it[1][0], it[1][1]] })
 
+	imputed_chunks = impute_chunks(all_pls.join(reference_vcfs).combine(chunks[0].flatten().map { file -> [file.getSimpleName(), file] }, by: 0))
+	
 	ligate_chunks(imputed_chunks[0].groupTuple())
 }
