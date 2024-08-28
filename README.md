@@ -1,7 +1,10 @@
 # Genotype imputation using low depth sequencing data
 
 ## 1. Description
-Pipeline for genotype imputation from low-depth sequencing data using [GLIMPSE1](https://github.com/odelaneau/GLIMPSE). This pipeline uses [GATK HaplotypeCaller](https://gatk.broadinstitute.org/hc/en-us/articles/360037225632-HaplotypeCaller) for estimating genotype probabilities at reference sites prior to imputation. The pipeline was developed using [Nextflow](https://www.nextflow.io/) and was tested on [SLURM](https://slurm.schedmd.com/documentation.html) job scheduler.
+Pipeline for genotype imputation from low-depth sequencing data using [GLIMPSE1](https://github.com/odelaneau/GLIMPSE). This pipeline uses [GATK HaplotypeCaller](https://gatk.broadinstitute.org/hc/en-us/articles/360037225632-HaplotypeCaller) for estimating genotype probabilities at reference sites before imputation. The pipeline was developed using [Nextflow](https://www.nextflow.io/) and was tested on [SLURM](https://slurm.schedmd.com/documentation.html) job scheduler.
+
+> [!IMPORTANT]
+> As recommended by the GLIMPSE1 authors, this pipeline imputes indels while ignoring indels' genotype likelihoods computed from the sequencing data. If you are interested in more accurate indel imputation, then consider switching to GLIMPSE2 (but keep in mind that GLIMPSE2 doesn't support a joint imputation).
 
 ## 2. Prerequisites
 The following software is required:
@@ -25,9 +28,10 @@ To run this pipline you will need:
 
 ## 4. Execution
 1. Modify `nextflow.config` configuration file:
-* `params.reference_vcfs` -- path to VCF/BCF files with phased reference panel genotypes. Each VCF/BCF file must have the corresponding tbi/csi index.
-* `params.reference_sites_vcfs` -- path to sites-only VCF/BCF files of the reference panel. Each VCF/BCF file must have the corresponding tbi/csi index.
+* `params.reference_vcfs` -- path to VCF/BCF files with phased reference panel genotypes. Each VCF/BCF file must have the corresponding tbi/csi index. The genotypes must be split by chromosome and contain prefixes: `chr1`, `chr2`, ..., `chr22`, `chrX_nonpar`, `chrX_par1`, `chrX_par2`.
+* `params.reference_sites_vcfs` -- path to sites-only VCF files of the reference panel. Each VCF file must have the corresponding tbi/csi index. The sites must be split by chromosome in the same way as the genotypes.
 * `params.study_bams` -- path to BAM/CRAM files. One BAM/CRAM file per study participant. Each BAM/CRAM file must have the corresponding bai/crai index.
+* `params.study_sample_ploidy` -- path to the text file listing sample ploidy in chromosome X. No header; space-delimited; one sample per line; two columns - sample name and number of chrX copies (1 or 2). You can estimate the ploidy of chromosome X from chromosome X sequencing depth.
 * `params.referenceDir` -- path to the folder with the reference genome *.fa file.
 * `params.referenceGenome` -- name of the reference genome *.fa file (e.g. hs37d5.fa).
 * `params.gatkContainer` -- path to the GATK singularity image file (.sif).
@@ -43,7 +47,7 @@ To run this pipline you will need:
 ```
 salloc --time=12:00:00 --ntasks=1 --mem-per-cpu=16G
 module load nextflow
-module load singularity
+module load apptainer
 module load bcftools
 nextflow run Imputation.nf
 ```
