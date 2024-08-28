@@ -31,7 +31,7 @@ To run this pipline you will need:
 * `params.reference_vcfs` -- path to VCF/BCF files with phased reference panel genotypes. Each VCF/BCF file must have the corresponding tbi/csi index. The genotypes must be split by chromosome and contain prefixes: `chr1`, `chr2`, ..., `chr22`, `chrX_nonpar`, `chrX_par1`, `chrX_par2`.
 * `params.reference_sites_vcfs` -- path to sites-only VCF files of the reference panel. Each VCF file must have the corresponding tbi/csi index. The sites must be split by chromosome in the same way as the genotypes.
 * `params.study_bams` -- path to BAM/CRAM files. One BAM/CRAM file per study participant. Each BAM/CRAM file must have the corresponding bai/crai index.
-* `params.study_sample_ploidy` -- path to the text file listing sample ploidy in chromosome X. No header; space-delimited; one sample per line; two columns - sample name and number of chrX copies (1 or 2). You can estimate the ploidy of chromosome X from chromosome X sequencing depth.
+* `params.study_sample_ploidy` -- path to the text file listing sample ploidy in chromosome X. No header; space-delimited; one sample per line; two columns - sample name and number of chrX copies (1 or 2). You can estimate the ploidy of chromosome X from chromosome X sequencing depth. You can ignore this argument if you are not interested in imputing chromosome X.
 * `params.referenceDir` -- path to the folder with the reference genome *.fa file.
 * `params.referenceGenome` -- name of the reference genome *.fa file (e.g. hs37d5.fa).
 * `params.gatkContainer` -- path to the GATK singularity image file (.sif).
